@@ -1,191 +1,181 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
-// --- 1. 类型定义 ---
-interface Session {
-  address: string;
-  token: string;
-}
-
-interface Email {
+// 【新增】定义邮件列表项的类型接口
+interface EmailListItem {
   id: string;
   from: {
     address: string;
     name: string;
   };
   subject: string;
+  intro: string;
   createdAt: string;
 }
 
-interface EmailDetails extends Email {
+// 【新增】定义邮件详情的类型接口
+interface EmailDetails {
+  id:string;
+  from: {
+    address: string;
+    name: string;
+  };
+  subject: string;
   text: string;
   html: string[];
+  createdAt: string;
 }
 
-// --- 2. 主组件 ---
-export default function EmailClientComponent({ dict }: { dict: { [key: string]: string } }) {
-  // --- 3. State 和 Hooks ---
-  const [session, setSession] = useState<Session | null>(null);
-  const [emails, setEmails] = useState<Email[]>([]);
-  const [selectedEmail, setSelectedEmail] = useState<EmailDetails | null>(null);
+export default function EmailClientComponent({ dict }: { dict: any }) {
+  const [emailAddress, setEmailAddress] = useState('');
+  const [token, setToken] = useState('');
+  const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isEmailLoading, setIsEmailLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [copyButtonText, setCopyButtonText] = useState(dict.copy);
-  const [isModalOpen, setIsModalOpen] = useState(false); // 新增 state 控制弹窗
+  const [isCopied, setIsCopied] = useState(false);
+  
+  // 【核心修改】使用具体的类型
+  const [emails, setEmails] = useState<EmailListItem[]>([]);
+  const [selectedEmail, setSelectedEmail] = useState<EmailDetails | null>(null);
 
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // --- 4. 核心功能函数 ---
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
-  // 复制邮箱地址
-  const handleCopy = () => {
-    if (session) {
-      navigator.clipboard.writeText(session.address);
-      setCopyButtonText(dict.copied);
-      setTimeout(() => setCopyButtonText(dict.copy), 2000);
-    }
-  };
-
-  // 创建新会话 (获取新邮箱)
-  const createNewSession = useCallback(async () => {
+  const createNewSession = async () => {
     setIsLoading(true);
-    setError(null);
-    setSession(null);
+    setError('');
     setEmails([]);
-    setSelectedEmail(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/session/new`, { method: 'POST' });
-      if (!response.ok) throw new Error(dict.error_create_session);
-      const data: Session = await response.json();
-      setSession(data);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
+      const res = await fetch(`${apiBaseUrl}/api/session/new`);
+      if (!res.ok) throw new Error('Failed to create session');
+      const data = await res.json();
+      setEmailAddress(data.address);
+      setToken(data.token);
+      setIsLoading(false);
+    } catch (err) {
+      setError(dict.errorCreateSession);
       setIsLoading(false);
     }
-  }, [API_BASE_URL, dict.error_create_session]);
+  };
 
-  // 获取邮件列表
-  const fetchEmails = useCallback(async (currentToken: string) => {
-    if (isRefreshing) return;
-    setIsRefreshing(true);
+  const fetchEmails = async (currentToken: string) => {
+    if (!currentToken) return;
     try {
-      const response = await fetch(`${API_BASE_URL}/api/emails?token=${currentToken}`);
-      if (!response.ok) {
-        if (response.status === 401) {
-          setError(dict.error_session_expired);
-          setSession(null);
-        }
-        return;
+      const res = await fetch(`${apiBaseUrl}/api/emails`, {
+        headers: { 'Authorization': `Bearer ${currentToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEmails(data);
       }
-      const data: Email[] = await response.json();
-      setEmails(data);
     } catch (err) {
-      console.error("Fetch emails failed:", err);
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [API_BASE_URL, isRefreshing, dict.error_session_expired]);
-
-  // 获取并设置选中的邮件详情，然后打开弹窗
-  const fetchAndSetSelectedEmail = async (emailId: string) => {
-    if (!session) return;
-    setIsEmailLoading(true);
-    setIsModalOpen(true); // 立即打开弹窗并显示加载状态
-    setSelectedEmail(null);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/email/${emailId}?token=${session.token}`);
-      if (!response.ok) throw new Error(dict.error_load_details);
-      const data: EmailDetails = await response.json();
-      setSelectedEmail(data);
-    } catch (err: any) {
-      // 在弹窗内显示错误，而不是全局
-      console.error(err);
-    } finally {
-      setIsEmailLoading(false);
+      console.error('Failed to fetch emails:', err);
     }
   };
 
-  // --- 5. useEffect Hooks ---
+  const handleEmailClick = async (emailId: string) => {
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/email/${emailId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedEmail(data);
+        setIsModalOpen(true);
+      }
+    } catch (err) {
+      console.error('Failed to fetch email details:', err);
+    }
+  };
 
-  // 组件加载时自动创建新会话
   useEffect(() => {
     createNewSession();
-  }, [createNewSession]);
+  }, []);
 
-  // 每10秒轮询一次邮件列表
   useEffect(() => {
-    if (!session?.token) return;
-    const intervalId = setInterval(() => fetchEmails(session.token), 10000);
-    return () => clearInterval(intervalId);
-  }, [session, fetchEmails]);
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+    if (token) {
+      intervalRef.current = setInterval(() => {
+        fetchEmails(token);
+      }, 7000);
+    }
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [token]);
 
-  // --- 6. UI 渲染 ---
+  const handleCopy = () => {
+    navigator.clipboard.writeText(emailAddress);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleString(undefined, { hour: '2-digit', minute: '2-digit' });
+  };
+
   return (
     <div className="app-container">
-      {/* 模块一：地址显示和操作 */}
       <div className="address-module">
-        <p className="label">{dict.yourAddress}</p>
+        <p className="label">{dict.yourTempAddress}</p>
         <div className="address-display">
-          {isLoading ? '...' : session?.address}
+          {isLoading ? '...' : emailAddress || 'N/A'}
         </div>
         {error && <p className="error-message">{error}</p>}
         <div className="actions-module">
-          <button onClick={handleCopy} disabled={!session || isLoading} className="btn btn-primary">{copyButtonText}</button>
-          <button onClick={() => session && fetchEmails(session.token)} disabled={isRefreshing || !session} className="btn">{dict.refresh}</button>
-          <button onClick={createNewSession} disabled={isLoading} className="btn">{dict.newEmail}</button>
+          <button onClick={handleCopy} disabled={!emailAddress || isLoading} className="btn">
+            {isCopied ? dict.copied : dict.copy}
+          </button>
+          <button onClick={() => fetchEmails(token)} disabled={!token || isLoading} className="btn">
+            {dict.refresh}
+          </button>
+          <button onClick={createNewSession} disabled={isLoading} className="btn btn-primary">
+            {dict.newEmail}
+          </button>
         </div>
       </div>
 
-      {/* 模块二：收件箱 */}
       <div className="inbox-module">
         <div className="inbox-header">
           <h2>{dict.inbox}</h2>
           <div className="scanner">
             <div className="scanner-indicator"></div>
-            <span>{isRefreshing ? (dict.checking || 'Checking...') : (dict.scanning || 'Scanning...')}</span>
+            <span>{dict.scanning}</span>
           </div>
         </div>
-        <ul className="email-list">
-          {emails.length > 0 ? (
-            emails.map(email => (
-              <li key={email.id} onClick={() => fetchAndSetSelectedEmail(email.id)} className="email-list-item">
+        {emails.length > 0 ? (
+          <ul className="email-list">
+            {emails.map((email) => (
+              <li key={email.id} className="email-list-item" onClick={() => handleEmailClick(email.id)}>
                 <p className="from">{email.from.name || email.from.address}</p>
-                <p className="subject">{email.subject || `(${(dict.noSubject || 'No Subject')})`}</p>
-                <p className="date">{new Date(email.createdAt).toLocaleString()}</p>
+                <p className="subject">{email.subject || `(${dict.noSubject})`}</p>
+                <p className="date">{formatDate(email.createdAt)}</p>
               </li>
-            ))
-          ) : (
-            <div className="empty-inbox">
-              <p>{isLoading ? (dict.generating || 'Generating...') : (dict.inboxEmpty || 'Your inbox is empty')}</p>
-            </div>
-          )}
-        </ul>
+            ))}
+          </ul>
+        ) : (
+          <div className="empty-inbox">
+            <p>{dict.waitingForEmails}</p>
+          </div>
+        )}
       </div>
 
-      {/* 模块三：邮件详情弹窗 (Modal) */}
-      {isModalOpen && (
+      {isModalOpen && selectedEmail && (
         <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{selectedEmail?.subject || (dict.loadingEmail || 'Loading Email...')}</h2>
-              <button onClick={() => setIsModalOpen(false)} className="modal-close-btn">&times;</button>
+              <h2>{selectedEmail.subject || `(${dict.noSubject})`}</h2>
+              <button className="modal-close-btn" onClick={() => setIsModalOpen(false)}>&times;</button>
             </div>
             <div className="modal-body">
-              {isEmailLoading ? (
-                <p>{dict.loadingEmail || 'Loading Email...'}...</p>
-              ) : selectedEmail ? (
-                <div>
-                  <p><strong>{dict.from}:</strong> {selectedEmail.from.name} &lt;{selectedEmail.from.address}&gt;</p>
-                  <hr style={{borderColor: 'var(--dark-border)', margin: '1rem 0'}} />
-                  <div className="email-content" dangerouslySetInnerHTML={{ __html: selectedEmail.html.join('') || selectedEmail.text.replace(/\n/g, '') }} />
-                </div>
-              ) : (
-                <p>{dict.error_load_details || 'Failed to load email details.'}</p>
-              )}
+              <div className="email-content" dangerouslySetInnerHTML={{ __html: selectedEmail.html ? selectedEmail.html.join('') : selectedEmail.text }} />
             </div>
           </div>
         </div>
