@@ -1,40 +1,44 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
-// 【新增】定义邮件列表项的类型接口
+interface Dictionary {
+  yourTempAddress: string;
+  errorCreateSession: string;
+  copied: string;
+  copy: string;
+  refresh: string;
+  newEmail: string;
+  inbox: string;
+  scanning: string;
+  noSubject: string;
+  waitingForEmails: string;
+}
+
 interface EmailListItem {
   id: string;
-  from: {
-    address: string;
-    name: string;
-  };
+  from: { address: string; name: string; };
   subject: string;
   intro: string;
   createdAt: string;
 }
 
-// 【新增】定义邮件详情的类型接口
 interface EmailDetails {
-  id:string;
-  from: {
-    address: string;
-    name: string;
-  };
+  id: string;
+  from: { address: string; name: string; };
   subject: string;
   text: string;
   html: string[];
   createdAt: string;
 }
 
-export default function EmailClientComponent({ dict }: { dict: any }) {
+export default function EmailClientComponent({ dict }: { dict: Dictionary }) {
   const [emailAddress, setEmailAddress] = useState('');
   const [token, setToken] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isCopied, setIsCopied] = useState(false);
   
-  // 【核心修改】使用具体的类型
   const [emails, setEmails] = useState<EmailListItem[]>([]);
   const [selectedEmail, setSelectedEmail] = useState<EmailDetails | null>(null);
 
@@ -43,7 +47,7 @@ export default function EmailClientComponent({ dict }: { dict: any }) {
 
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
-  const createNewSession = async () => {
+  const createNewSession = useCallback(async () => {
     setIsLoading(true);
     setError('');
     setEmails([]);
@@ -55,12 +59,13 @@ export default function EmailClientComponent({ dict }: { dict: any }) {
       setToken(data.token);
       setIsLoading(false);
     } catch (err) {
+      console.error("Session creation failed:", err);
       setError(dict.errorCreateSession);
       setIsLoading(false);
     }
-  };
+  }, [apiBaseUrl, dict.errorCreateSession]);
 
-  const fetchEmails = async (currentToken: string) => {
+  const fetchEmails = useCallback(async (currentToken: string) => {
     if (!currentToken) return;
     try {
       const res = await fetch(`${apiBaseUrl}/api/emails`, {
@@ -73,7 +78,7 @@ export default function EmailClientComponent({ dict }: { dict: any }) {
     } catch (err) {
       console.error('Failed to fetch emails:', err);
     }
-  };
+  }, [apiBaseUrl]);
 
   const handleEmailClick = async (emailId: string) => {
     try {
@@ -92,13 +97,14 @@ export default function EmailClientComponent({ dict }: { dict: any }) {
 
   useEffect(() => {
     createNewSession();
-  }, []);
+  }, [createNewSession]);
 
   useEffect(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
     if (token) {
+      fetchEmails(token); 
       intervalRef.current = setInterval(() => {
         fetchEmails(token);
       }, 7000);
@@ -108,7 +114,7 @@ export default function EmailClientComponent({ dict }: { dict: any }) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [token]);
+  }, [token, fetchEmails]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(emailAddress);
