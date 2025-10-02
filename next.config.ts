@@ -1,20 +1,13 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
 
-const nextConfig = {
-  // 在这里添加 i18n 配置
+// 只声明一次 nextConfig，并将所有配置都放在这一个对象里
+const nextConfig: NextConfig = {
   i18n: {
-    // 这是一个支持的语言环境列表
     locales: ['en', 'zh', 'de', 'fr'],
-    
-    // 这是当用户访问一个没有语言前缀的路径时使用的默认语言环境
-    // 例如，访问 / 会被重定向到 /en
     defaultLocale: 'en',
   },
-  // 注意：reactStrictMode: true 是默认开启的，无需显式添加
-};
-
-const nextConfig: NextConfig = {
-  /* config options here */
+  // 如果您未来有其他配置，也可以继续添加在这里
+  // 例如: reactStrictMode: true,
 };
 
 export default nextConfig;
