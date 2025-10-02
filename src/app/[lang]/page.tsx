@@ -1,4 +1,4 @@
-import { getDictionary } from '../../../../dictionaries';
+import { getDictionary } from '@/lib/dictionaries';
 import EmailClientComponent from './EmailClientComponent';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
