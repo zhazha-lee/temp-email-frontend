@@ -5,11 +5,10 @@ import Footer from '@/components/Footer';
 import { Metadata } from 'next';
 
 // 1. 【核心修正】导入 Next.js 的内置 PageProps 类型
-import type { PageProps } from 'next';
-
-// 2. 【核心修正】让我们的 Props 类型继承自 PageProps
-type Props = PageProps<{ lang: 'en' | 'zh' | 'de' | 'fr' }>;
-
+type Props = {
+  params: { lang: 'en' | 'zh' | 'de' | 'fr' };
+  searchParams: { [key: string]: string | string[] | undefined };
+};
 // 动态生成 Meta Tags (为了 SEO)
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const dict = await getDictionary(params.lang);
