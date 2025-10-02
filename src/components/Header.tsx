@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { getDictionary } from '../../../dictionaries';
+import { getDictionary } from '@/lib/dictionaries';
 
 // 定义 Props 类型
 type HeaderProps = {
