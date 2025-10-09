@@ -1,14 +1,28 @@
 import { getDictionary } from '@/lib/dictionaries';
-import EmailClientComponent from './EmailClientComponent';
+// import EmailClientComponent from './EmailClientComponent'; // 暂时注释掉 EmailClientComponent 的导入
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { Metadata } from 'next';
 
-// 1. 【核心修正】导入 Next.js 的内置 PageProps 类型
+// 1. 直接定义页面需要的 props 类型
 type Props = {
   params: { lang: 'en' | 'zh' | 'de' | 'fr' };
   searchParams: { [key: string]: string | string[] | undefined };
 };
+
+// 2. 将 FaqItem 组件定义移到顶层 (如果之前没有做，现在做)
+const FaqItem = ({ q, a }: { q: string; a: string }) => (
+  <details className="faq-item">
+    <summary>
+      {q}
+      <span className="icon">
+        <svg fill="none" height="24" viewBox="0 0 24 24" width="24" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+      </span>
+    </summary>
+    <p>{a}</p>
+  </details>
+);
+
 // 动态生成 Meta Tags (为了 SEO)
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const dict = await getDictionary(params.lang);
@@ -31,18 +45,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function HomePage({ params }: Props) {
   const dict = await getDictionary(params.lang);
 
-  const FaqItem = ({ q, a }: { q: string; a: string }) => (
-    <details className="faq-item">
-      <summary>
-        {q}
-        <span className="icon">
-          <svg fill="none" height="24" viewBox="0 0 24 24" width="24" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
-        </span>
-      </summary>
-      <p>{a}</p>
-    </details>
-  );
-
   return (
     <div className="page-wrapper">
       <Header dict={dict} currentLang={params.lang} />
@@ -52,7 +54,8 @@ export default async function HomePage({ params }: Props) {
             <h1 id="core-app-heading">{dict.mainHeading}</h1>
             <p className="tagline">{dict.tagline}</p>
           </div>
-          <EmailClientComponent dict={dict} />
+          {/* 【核心修复】暂时移除 EmailClientComponent 的渲染 */}
+          {/* <EmailClientComponent dict={dict} /> */}
         </section>
         <div className="static-content-wrapper">
           <div className="static-content">
