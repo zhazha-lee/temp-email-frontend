@@ -45,14 +45,16 @@ export default function EmailClientComponent({ dict }: { dict: Dictionary }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+  // 【核心修复】将 apiBaseUrl 的获取延迟到 useEffect 中，确保只在客户端执行
+  const apiBaseUrlRef = useRef<string | undefined>(undefined);
 
   const createNewSession = useCallback(async () => {
     setIsLoading(true);
     setError('');
     setEmails([]);
     try {
-      const res = await fetch(`${apiBaseUrl}/api/session/new`);
+      // 【核心修复】使用 ref 获取 apiBaseUrl
+      const res = await fetch(`${apiBaseUrlRef.current}/api/session/new`);
       if (!res.ok) throw new Error('Failed to create session');
       const data = await res.json();
       setEmailAddress(data.address);
@@ -63,12 +65,13 @@ export default function EmailClientComponent({ dict }: { dict: Dictionary }) {
       setError(dict.errorCreateSession);
       setIsLoading(false);
     }
-  }, [apiBaseUrl, dict.errorCreateSession]);
+  }, [dict.errorCreateSession]); // 移除 apiBaseUrl 依赖，因为它现在通过 ref 获取
 
   const fetchEmails = useCallback(async (currentToken: string) => {
     if (!currentToken) return;
     try {
-      const res = await fetch(`${apiBaseUrl}/api/emails`, {
+      // 【核心修复】使用 ref 获取 apiBaseUrl
+      const res = await fetch(`${apiBaseUrlRef.current}/api/emails`, {
         headers: { 'Authorization': `Bearer ${currentToken}` }
       });
       if (res.ok) {
@@ -78,11 +81,12 @@ export default function EmailClientComponent({ dict }: { dict: Dictionary }) {
     } catch (err) {
       console.error('Failed to fetch emails:', err);
     }
-  }, [apiBaseUrl]);
+  }, []); // 移除 apiBaseUrl 依赖，因为它现在通过 ref 获取
 
   const handleEmailClick = async (emailId: string) => {
     try {
-      const res = await fetch(`${apiBaseUrl}/api/email/${emailId}`, {
+      // 【核心修复】使用 ref 获取 apiBaseUrl
+      const res = await fetch(`${apiBaseUrlRef.current}/api/email/${emailId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -95,7 +99,9 @@ export default function EmailClientComponent({ dict }: { dict: Dictionary }) {
     }
   };
 
+  // 【核心修复】在 useEffect 中初始化 apiBaseUrlRef.current
   useEffect(() => {
+    apiBaseUrlRef.current = process.env.NEXT_PUBLIC_API_BASE_URL;
     createNewSession();
   }, [createNewSession]);
 
